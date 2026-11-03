@@ -47,7 +47,7 @@ export function AddTeacherDialog({ open, onClose }: { open: boolean; onClose: ()
     setBusy(true)
     try {
       await actions.addTeacher({ ...form, classIds, subjectIds })
-      toast({ title: 'Teacher added', description: `${form.firstName} ${form.lastName} — now create their login (see README, "Adding users").`, tone: 'success' })
+      toast({ title: 'Teacher added', description: `${form.firstName} ${form.lastName} — now send their invitation from the Invitations page.`, tone: 'success' })
       onClose()
       setForm({ firstName: '', lastName: '', email: '', phone: '' }); setClassIds([]); setSubjectIds([])
     } catch (err) {

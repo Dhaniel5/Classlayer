@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { Bell, LogOut } from 'lucide-react'
+import { Bell, LogOut, KeyRound } from 'lucide-react'
 import logoIcon from '@/assets/logo-icon.png'
 import { parentNav } from '@/lib/permissions'
 import { useAuth } from '@/services/auth/AuthContext'
@@ -48,6 +48,9 @@ export function ParentShell() {
             )}
           </div>
           <Avatar initials={nameInitials} color={user.avatarColor} size={32} />
+          <button title="Change password" onClick={() => navigate('/set-password')} className="h-9 w-9 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+            <KeyRound className="h-4 w-4" />
+          </button>
           <button
             onClick={async () => { await signOut(); navigate('/login') }}
             className="h-9 w-9 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-red-600"

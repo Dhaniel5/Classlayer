@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Menu, Search, Bell, ChevronDown, LogOut } from 'lucide-react'
+import { Menu, Search, Bell, ChevronDown, LogOut, KeyRound } from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
 import { useAuth } from '@/services/auth/AuthContext'
 import { useStore } from '@/services/store'
@@ -91,6 +91,12 @@ export function Topbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
             <>
               <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
               <div className="absolute right-0 top-12 z-50 w-48 rounded-xl border border-slate-200 bg-white shadow-lg py-1">
+                <button
+                  onClick={() => { setProfileOpen(false); navigate('/set-password') }}
+                  className="flex w-full items-center gap-2 px-3.5 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  <KeyRound className="h-4 w-4" /> Change password
+                </button>
                 <button
                   onClick={async () => {
                     await signOut()

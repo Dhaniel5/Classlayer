@@ -128,7 +128,7 @@ function UsersAndRoles({ myEmail, proprietor }: { myEmail: string; proprietor: b
     setBusy(true)
     try {
       await addStaffRole(form.email, form.name, form.role)
-      toast({ title: 'Access granted', description: `${form.email} can now sign in as ${roleLabels[form.role as Role]} once their login exists.`, tone: 'success' })
+      toast({ title: 'Access granted', description: `${form.email} can now be invited as ${roleLabels[form.role as Role]}. Send the invitation from the Invitations page.`, tone: 'success' })
       setForm({ email: '', name: '', role: form.role }); await load()
     } catch (err) { toast({ title: 'Could not add', description: (err as Error).message, tone: 'error' }) }
     finally { setBusy(false) }
@@ -168,7 +168,7 @@ function UsersAndRoles({ myEmail, proprietor }: { myEmail: string; proprietor: b
               </Select></div>
             <Button type="submit" disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" />}Grant access</Button>
           </form>
-          <p className="text-xs text-slate-400">After granting access, create their login in Supabase (Authentication → Users → Add user). Email must be confirmed to sign in.</p>
+          <p className="text-xs text-slate-400">After granting access, send their invitation from the Invitations page. They set their own password from the email link.</p>
         </CardContent>
       </Card>
     </div>

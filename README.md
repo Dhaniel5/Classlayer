@@ -11,8 +11,10 @@ with an empty school.
 3. **Authentication → Providers → Email**: keep "Confirm email" **on**. Under
    **Authentication → Sign In / Providers**, **turn off "Allow new users to sign up"** — accounts are
    created by you, not by the public.
-4. **Authentication → URL Configuration**: set *Site URL* to your deployed address
-   (and add `http://localhost:5173` for local work). Needed for password-reset links.
+4. **Authentication → URL Configuration**: set *Site URL* to your deployed address (e.g.
+   `https://classlayer.netlify.app`) and add these under **Redirect URLs** (the `/**` matters):
+   `https://YOUR-SITE-ADDRESS/**` and `http://localhost:5173/**`.
+   Invitation and password-reset links won't work without this.
 5. **Project Settings → API**: copy the Project URL and the `anon` public key.
 
 ## 2. Run the app
@@ -35,18 +37,55 @@ Never put the `service_role` key in this app or in `.env`.
    ```
 3. Sign in to CLASSLAYER. Then go to **Settings** to set the school name, session and term.
 
-## 4. Adding people
+## 4. Adding people and inviting them
 
-A person's **role is decided by their email**, and they can only sign in once a login exists
-(Supabase → Authentication → Users → Add user, *Auto Confirm* ticked, or send an invite).
+A person's **role is decided by their email**. The flow is always: add them to the school, then invite them.
 
-| Who | Where you add them in CLASSLAYER | Then |
+| Who | 1. Add them | 2. Invite them |
 |---|---|---|
-| Teacher | Teachers → Add Teacher (email + classes + subjects) | create a login with the same email |
-| Parent | Students → Add Student (parent email) | create a login with the parent's email |
-| Head of School, Head of Academics, Admin, Accountant | Settings → Users & Roles (Proprietor/Admin only) | create a login with the same email |
+| Teacher | Teachers → Add Teacher (email + classes + subjects) | **Invitations** page |
+| Parent | Students → Add Student (parent email) | **Invitations** page |
+| Head of School, Head of Academics, Admin, Accountant | Settings → Users & Roles (Proprietor/Admin only) | **Invitations** page |
 
-Typical order: Subjects → Classes (with the term fee) → Teachers → Students.
+On the **Invitations** page you can invite selected people or "everyone not yet invited". Each person gets an
+email with a link; they choose their own password and sign in. The page shows who is *Not invited*, *Invited
+(not accepted yet)* or *Active*. Students have no login in V1 — parents see their child's information.
+
+Who may invite whom: the Proprietor can invite anyone; the Head of School can invite teachers and parents;
+the School Admin can invite teachers, parents, accountants and heads of academics. Nobody else can invite.
+
+Forgot your password? **Forgot password?** on the login page emails a reset link to the same set-password page.
+Signed-in users can change their password from the profile menu (the key icon for parents).
+
+Typical order: Subjects → Classes (with the term fee) → Teachers → Students → Invitations.
+
+## 5. Turn on invitations (one-time, about 10 minutes)
+
+Invitations need a small server-side function, because sending them requires a secret key that must never be
+in the website.
+
+**a) Deploy the function** (dashboard method, no command line):
+1. Supabase → **Edge Functions** → **Deploy a new function** → **Via Editor**.
+2. Name it exactly `invite-users`. Delete any sample code, paste in the whole of
+   `supabase/functions/invite-users/index.ts`, and deploy. Leave "Verify JWT" **on**.
+
+   (Command-line alternative: `npx supabase login`, `npx supabase link --project-ref YOUR-PROJECT-REF`,
+   `npx supabase functions deploy invite-users`.)
+
+**b) Add one secret:** Edge Functions → **Secrets** (or "Manage secrets") → add
+`SITE_URL` = your live address, with no slash at the end, e.g. `https://classlayer.netlify.app`.
+Invitation links always point here. (The other keys the function needs are provided by Supabase automatically.)
+
+**c) Set up real email sending — do this before inviting more than a few people.**
+Supabase's built-in email sender allows only a handful of emails **per hour**, so a bulk invite will stop
+part-way (the page tells you who didn't get one). Under **Authentication → Emails → SMTP Settings**, connect a
+provider such as Resend, Brevo or Mailgun. Also edit **Authentication → Email Templates → Invite user** so the
+email says CLASSLAYER and your school name rather than the generic text.
+
+**d) Recommended:** Authentication → Policies/Passwords: set the minimum password length to 8 or more
+(the set-password page already requires 8).
+
+If you open the Invitations page before this is done, it shows a "not set up yet" notice instead of failing.
 
 ## Who can see what (enforced in the database, not just the screens)
 
@@ -68,8 +107,13 @@ A teacher's app never receives other classes' data at all — Postgres row-level
   role-less emails see nothing, fee/payment triggers, append-only payments, score and attendance
   validation, role-granting limits). TypeScript compiles, the production build succeeds, and the login /
   route protection renders in a browser.
-- **Not tested:** the app against a live Supabase project (I had no access to one). Expect to spend your
-  first session in the app fixing small things; send me the errors and I'll fix them.
+- **Tested (invitations):** the `invite-users` function type-checks in Deno and passes 21 checks against a fake
+  Supabase (`supabase/tests/invite_function_test.mjs`): unknown emails can't be invited, the link always uses
+  `SITE_URL`, each role can invite only who it should, rate limits stop cleanly. The set-password page and the
+  Invitations page were run in a real browser against a fake backend.
+- **Not tested:** anything against a live Supabase project (I had no access to one), including actual email
+  delivery and how Supabase treats re-inviting someone who was invited but never accepted. Expect to spend your
+  first session fixing small things; send me the errors and I'll fix them.
 
 ## Decisions you should confirm
 
@@ -81,8 +125,8 @@ A teacher's app never receives other classes' data at all — Postgres row-level
 
 ## Known limits
 
-- Users aren't invited from inside the app yet (that needs a server-side function with the service key).
-  For now you create logins in the Supabase dashboard as above.
+- Invitation emails depend on your Supabase email setup (see section 5c). A person who opens their invite
+  link but closes the page before choosing a password can use **Forgot password?** to set one.
 - The "AI" is rule-based (no language model): it computes insights and fills templates from your recorded data.
   A real LLM should be called from a server-side function, never straight from the browser.
 - Only the last 120 days of attendance are loaded into the app; only the current term's fees are shown.

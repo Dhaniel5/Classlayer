@@ -8,3 +8,9 @@ and check, per user, exactly what they can read and write.
     psql -d cltest -f rls_test.sql
 
 Read the `expect:` notes next to each result. Re-run after any change to the migration.
+
+## Invitation function test
+
+Needs Deno and Node. Starts the function against a fake Supabase and checks who may invite whom:
+
+    DENO_BIN=deno node invite_function_test.mjs

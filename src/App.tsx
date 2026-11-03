@@ -7,6 +7,8 @@ import { ParentShell } from '@/components/layout/ParentShell'
 import { ProtectedRoute, RequireFeature } from '@/components/layout/ProtectedRoute'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import SetupRequired from '@/pages/auth/SetupRequired'
+import SetPasswordPage from '@/pages/auth/SetPasswordPage'
+import InvitationsPage from '@/pages/admin/InvitationsPage'
 import type { Feature } from '@/lib/permissions'
 
 import LoginPage from '@/pages/auth/LoginPage'
@@ -56,6 +58,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<RootRedirect />} />
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/set-password" element={<SetPasswordPage />} />
 
               {/* Staff workspace: school leadership, teachers, accountant */}
               <Route
@@ -83,6 +86,7 @@ export default function App() {
                 <Route path="ai-insights" element={guard('ai-insights', <AIInsightsPage />)} />
                 <Route path="announcements" element={guard('announcements', <AnnouncementsPage />)} />
                 <Route path="settings" element={guard('settings', <SettingsPage />)} />
+                <Route path="access" element={guard('access', <InvitationsPage />)} />
                 <Route index element={<Navigate to="dashboard" replace />} />
               </Route>
 

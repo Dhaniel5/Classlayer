@@ -3,13 +3,13 @@ import type { Role } from '@/types'
 import {
   LayoutDashboard, Users, GraduationCap, School2, BookOpen, UserRound,
   CalendarCheck, ClipboardList, Award, Wallet, FileBarChart, Sparkles,
-  Settings, Megaphone,
+  Settings, Megaphone, MailPlus,
 } from 'lucide-react'
 
 export type Feature =
   | 'dashboard' | 'students' | 'teachers' | 'classes' | 'subjects' | 'parents'
   | 'attendance' | 'assessments' | 'results' | 'fees' | 'reports'
-  | 'ai-insights' | 'announcements' | 'settings'
+  | 'ai-insights' | 'announcements' | 'settings' | 'access'
 
 export interface NavItem {
   label: string
@@ -29,7 +29,7 @@ export const canSeeFinance = (r: Role) => FINANCE_ROLES.includes(r)
 
 const ALL: Feature[] = [
   'dashboard', 'students', 'teachers', 'classes', 'subjects', 'parents', 'attendance',
-  'assessments', 'results', 'fees', 'reports', 'ai-insights', 'announcements', 'settings',
+  'assessments', 'results', 'fees', 'reports', 'ai-insights', 'announcements', 'settings', 'access',
 ]
 
 const featuresByRole: Record<Role, Feature[]> = {
@@ -63,6 +63,7 @@ const allNav: NavItem[] = [
   { label: 'Reports', path: '/app/reports', feature: 'reports', icon: FileBarChart },
   { label: 'AI Insights', path: '/app/ai-insights', feature: 'ai-insights', icon: Sparkles },
   { label: 'Announcements', path: '/app/announcements', feature: 'announcements', icon: Megaphone },
+  { label: 'Invitations', path: '/app/access', feature: 'access', icon: MailPlus },
   { label: 'Settings', path: '/app/settings', feature: 'settings', icon: Settings },
 ]
 
