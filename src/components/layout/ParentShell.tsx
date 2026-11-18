@@ -12,7 +12,7 @@ import { StoreGate } from './StoreGate'
 
 export function ParentShell() {
   const { user, signOut } = useAuth()
-  const { notifications, actions } = useStore()
+  const { notifications, actions, featureOn } = useStore()
   const navigate = useNavigate()
   const [notifOpen, setNotifOpen] = useState(false)
   if (!user) return null
@@ -66,14 +66,14 @@ export function ParentShell() {
         </StoreGate>
       </main>
 
-      <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 flex justify-around py-1.5">
-        {parentNav.map((item) => (
+      <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 flex overflow-x-auto py-1.5 md:justify-center">
+        {parentNav.filter((n) => !n.flag || featureOn(n.flag)).map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
             className={({ isActive }) =>
               cn(
-                'flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[11px] font-medium min-w-[56px]',
+                'flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[11px] font-medium min-w-[64px] shrink-0',
                 isActive ? 'text-teal-700' : 'text-slate-400'
               )
             }

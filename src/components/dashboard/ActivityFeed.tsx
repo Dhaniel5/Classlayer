@@ -1,4 +1,4 @@
-import { UserPlus, CalendarCheck, ClipboardCheck, Wallet, GraduationCap } from 'lucide-react'
+import { NotebookPen, UserPlus, CalendarCheck, ClipboardCheck, Wallet, GraduationCap } from 'lucide-react'
 import type { RecentActivity } from '@/types'
 import { timeAgo } from '@/lib/utils'
 import { EmptyState } from '@/components/ui/states'
@@ -8,6 +8,7 @@ const iconMap: Record<RecentActivity['type'], React.ReactNode> = {
   teacher: <GraduationCap className="h-3.5 w-3.5" />,
   attendance: <CalendarCheck className="h-3.5 w-3.5" />,
   assessment: <ClipboardCheck className="h-3.5 w-3.5" />,
+  assignment: <NotebookPen className="h-3.5 w-3.5" />,
   payment: <Wallet className="h-3.5 w-3.5" />,
 }
 
@@ -16,6 +17,7 @@ const colorMap: Record<RecentActivity['type'], string> = {
   teacher: 'bg-violet-50 text-violet-600',
   attendance: 'bg-teal-50 text-teal-600',
   assessment: 'bg-amber-50 text-amber-600',
+  assignment: 'bg-sky-50 text-sky-600',
   payment: 'bg-emerald-50 text-emerald-600',
 }
 

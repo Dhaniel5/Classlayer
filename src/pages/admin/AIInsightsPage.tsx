@@ -6,14 +6,16 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { InsightCard } from '@/components/ai/InsightCard'
 import { ReportCommentGenerator } from '@/components/ai/ReportCommentGenerator'
 import { EmptyState } from '@/components/ui/states'
-import { generateSchoolInsights } from '@/services/ai/aiService'
+import { generateSchoolInsights, generateFeeInsights } from '@/services/ai/aiService'
 import { attendanceRateForClass, subjectAverage, studentsNeedingAttention, subjectDeclines } from '@/lib/analytics'
 import type { AIInsight } from '@/types'
 
 export default function AIInsightsPage() {
-  const { classes, subjects, results, attendanceRecords, students, assessments, assessmentScores, school } = useStore()
+  const { classes, subjects, results, attendanceRecords, students, assessments, assessmentScores, school, fees } = useStore()
   const { user } = useAuth()
   const [insights, setInsights] = useState<AIInsight[] | null>(null)
+  // The accountant has no access to academic data; their AI page covers fee collection only.
+  const academic = user?.role !== 'accountant'
 
   useEffect(() => {
     setInsights(null)
@@ -24,21 +26,31 @@ export default function AIInsightsPage() {
       studentsNeedingAttention: studentsNeedingAttention(students, results, attendanceRecords).map((s) => ({
         name: s.name, className: classes.find((c) => c.id === s.classId)?.name ?? '', reason: s.reason,
       })),
-    }).then(setInsights)
-  }, [classes, subjects, results, attendanceRecords, students, assessments, assessmentScores, school.currentTerm, school.currentSession])
+    }).then((academicInsights) => {
+      const byClass = classes.map((c) => {
+        const f = fees.filter((x) => x.classId === c.id)
+        return {
+          className: c.name, students: f.length,
+          due: f.reduce((s, x) => s + x.amountDue, 0), paid: f.reduce((s, x) => s + x.amountPaid, 0),
+          withBalance: f.filter((x) => x.status !== 'Paid').length,
+        }
+      })
+      setInsights([...generateFeeInsights(byClass), ...academicInsights])
+    })
+  }, [classes, subjects, results, attendanceRecords, students, assessments, assessmentScores, school.currentTerm, school.currentSession, fees])
 
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-xl font-semibold text-slate-900">AI Insights</h1>
         <p className="text-sm text-slate-500 mt-0.5">
-          Observations computed from your school's recorded data{user?.role === 'teacher' ? ' (your classes only)' : ''}.
+          {academic ? "Observations computed from your school's recorded data" : "Observations computed from this term's fee records"}{user?.role === 'teacher' ? ' (your classes only)' : ''}.
         </p>
       </div>
       <Tabs defaultValue="school">
         <TabsList>
           <TabsTrigger value="school">Insights</TabsTrigger>
-          <TabsTrigger value="comments">Report Comments</TabsTrigger>
+          {academic && <TabsTrigger value="comments">Report Comments</TabsTrigger>}
         </TabsList>
         <TabsContent value="school">
           {!insights ? (
@@ -49,7 +61,7 @@ export default function AIInsightsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{insights.map((i) => <InsightCard key={i.id} insight={i} />)}</div>
           )}
         </TabsContent>
-        <TabsContent value="comments"><ReportCommentGenerator /></TabsContent>
+        {academic && <TabsContent value="comments"><ReportCommentGenerator /></TabsContent>}
       </Tabs>
     </div>
   )

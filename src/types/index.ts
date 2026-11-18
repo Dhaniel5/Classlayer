@@ -23,6 +23,11 @@ export interface User {
   linkedId?: string // teacherId / parentId / studentId depending on role
 }
 
+export interface SchoolFeatures {
+  /** Homework module (teacher posts a task; marks score or done/not done; parents see it). */
+  assignments: boolean
+}
+
 export interface School {
   id: string
   name: string
@@ -32,6 +37,7 @@ export interface School {
   logoInitials: string
   currentSession: string
   currentTerm: 'First Term' | 'Second Term' | 'Third Term'
+  features: SchoolFeatures
 }
 
 export interface GradeBand {
@@ -193,6 +199,7 @@ export type NotificationType =
   | 'payment'
   | 'report'
   | 'attendance'
+  | 'assignment'
 
 export interface AppNotification {
   id: string
@@ -219,7 +226,34 @@ export interface AIInsight {
 
 export interface RecentActivity {
   id: string
-  type: 'student' | 'teacher' | 'attendance' | 'assessment' | 'payment'
+  type: 'student' | 'teacher' | 'attendance' | 'assessment' | 'assignment' | 'payment'
   message: string
   timestamp: string
+}
+
+export type AssignmentMode = 'score' | 'done'
+export type AssignmentStatus = 'done' | 'not_done'
+
+export interface Assignment {
+  id: string
+  classId: string
+  subjectId: string
+  title: string
+  description: string
+  dueDate: string
+  /** 'score' = teacher records a mark out of maxScore; 'done' = teacher records done / not done */
+  mode: AssignmentMode
+  maxScore: number | null
+  term: string
+  session: string
+  createdBy: string
+  createdAt: string
+}
+
+export interface AssignmentRecord {
+  id: string
+  assignmentId: string
+  studentId: string
+  status: AssignmentStatus
+  score: number | null
 }

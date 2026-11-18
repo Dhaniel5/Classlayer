@@ -1,20 +1,22 @@
 import type { ComponentType } from 'react'
-import type { Role } from '@/types'
+import type { Role, SchoolFeatures } from '@/types'
 import {
   LayoutDashboard, Users, GraduationCap, School2, BookOpen, UserRound,
   CalendarCheck, ClipboardList, Award, Wallet, FileBarChart, Sparkles,
-  Settings, Megaphone, MailPlus,
+  Settings, Megaphone, MailPlus, NotebookPen,
 } from 'lucide-react'
 
 export type Feature =
   | 'dashboard' | 'students' | 'teachers' | 'classes' | 'subjects' | 'parents'
   | 'attendance' | 'assessments' | 'results' | 'fees' | 'reports'
-  | 'ai-insights' | 'announcements' | 'settings' | 'access'
+  | 'ai-insights' | 'announcements' | 'settings' | 'access' | 'assignments'
 
 export interface NavItem {
   label: string
   path: string
   feature?: Feature
+  /** Optional module: hidden when the school has switched it off. */
+  flag?: keyof SchoolFeatures
   icon: ComponentType<{ className?: string }>
 }
 
@@ -30,7 +32,11 @@ export const canSeeFinance = (r: Role) => FINANCE_ROLES.includes(r)
 const ALL: Feature[] = [
   'dashboard', 'students', 'teachers', 'classes', 'subjects', 'parents', 'attendance',
   'assessments', 'results', 'fees', 'reports', 'ai-insights', 'announcements', 'settings', 'access',
+  'assignments',
 ]
+
+/** Features that a school can switch on/off in Settings → Features. */
+export const FEATURE_FLAGS: Partial<Record<Feature, keyof SchoolFeatures>> = { assignments: 'assignments' }
 
 const featuresByRole: Record<Role, Feature[]> = {
   proprietor: ALL,
@@ -38,10 +44,12 @@ const featuresByRole: Record<Role, Feature[]> = {
   admin: ALL,
   head_of_academics: [
     'dashboard', 'students', 'teachers', 'classes', 'subjects', 'parents', 'attendance',
-    'assessments', 'results', 'reports', 'ai-insights', 'announcements',
+    'assessments', 'assignments', 'results', 'reports', 'ai-insights', 'announcements',
   ],
-  teacher: ['dashboard', 'students', 'classes', 'attendance', 'assessments', 'results', 'ai-insights', 'announcements'],
-  accountant: ['dashboard', 'fees', 'reports', 'announcements'],
+  teacher: ['dashboard', 'students', 'classes', 'attendance', 'assessments', 'assignments', 'results', 'ai-insights', 'announcements'],
+  // AI is staff-only: parents (and students) are never given 'ai-insights'.
+  // The accountant's AI page shows fee insights only — they have no access to academic data.
+  accountant: ['dashboard', 'fees', 'reports', 'ai-insights', 'announcements'],
   parent: [],
 }
 
@@ -58,6 +66,7 @@ const allNav: NavItem[] = [
   { label: 'Parents', path: '/app/parents', feature: 'parents', icon: UserRound },
   { label: 'Attendance', path: '/app/attendance', feature: 'attendance', icon: CalendarCheck },
   { label: 'Assessments', path: '/app/assessments', feature: 'assessments', icon: ClipboardList },
+  { label: 'Assignments', path: '/app/assignments', feature: 'assignments', flag: 'assignments', icon: NotebookPen },
   { label: 'Results', path: '/app/results', feature: 'results', icon: Award },
   { label: 'Fees', path: '/app/fees', feature: 'fees', icon: Wallet },
   { label: 'Reports', path: '/app/reports', feature: 'reports', icon: FileBarChart },
@@ -67,14 +76,15 @@ const allNav: NavItem[] = [
   { label: 'Settings', path: '/app/settings', feature: 'settings', icon: Settings },
 ]
 
-export function getNavForRole(role: Role): NavItem[] {
-  return allNav.filter((n) => n.feature && canAccess(role, n.feature))
+export function getNavForRole(role: Role, featureOn: (f: keyof SchoolFeatures) => boolean = () => true): NavItem[] {
+  return allNav.filter((n) => n.feature && canAccess(role, n.feature) && (!n.flag || featureOn(n.flag)))
 }
 
 export const parentNav: NavItem[] = [
   { label: 'Home', path: '/parent/home', icon: LayoutDashboard },
   { label: 'My Child', path: '/parent/child', icon: GraduationCap },
   { label: 'Attendance', path: '/parent/attendance', icon: CalendarCheck },
+  { label: 'Assignments', path: '/parent/assignments', flag: 'assignments', icon: NotebookPen },
   { label: 'Results', path: '/parent/results', icon: Award },
   { label: 'Fees', path: '/parent/fees', icon: Wallet },
   { label: 'Reports', path: '/parent/reports', icon: FileBarChart },

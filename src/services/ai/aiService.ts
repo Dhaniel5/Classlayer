@@ -143,3 +143,42 @@ export async function generateSchoolInsights(context: {
 
   return insights
 }
+
+const naira = (n: number) => '₦' + Math.round(n).toLocaleString('en-NG')
+
+/**
+ * Fee-collection insights from this term's fee records only. Used for roles that can see fees
+ * (Proprietor, Head of School, School Admin, Accountant). Never invents figures.
+ */
+export function generateFeeInsights(byClass: { className: string; due: number; paid: number; students: number; withBalance: number }[]): AIInsight[] {
+  const classes = byClass.filter((c) => c.due > 0)
+  if (classes.length === 0) return []
+  const now = new Date().toISOString()
+  const out: AIInsight[] = []
+  const due = classes.reduce((s, c) => s + c.due, 0)
+  const paid = classes.reduce((s, c) => s + c.paid, 0)
+  const overall = Math.round((paid / due) * 100)
+
+  out.push({
+    id: 'fee-overall', scope: 'school',
+    title: `${overall}% of this term's fees collected`,
+    observation: `${naira(paid)} of ${naira(due)} has been collected. ${naira(due - paid)} is still outstanding.`,
+    supportingData: `Based on this term's fee records for ${classes.length} class${classes.length === 1 ? '' : 'es'}.`,
+    suggestedAction: overall >= 85 ? 'Collection is healthy. Follow up with the few remaining balances.' : 'Send reminders to families with a balance, starting with the largest.',
+    level: overall >= 85 ? 'positive' : overall >= 60 ? 'neutral' : 'warning', generatedAt: now,
+  })
+
+  const worst = [...classes].sort((a, b) => a.paid / a.due - b.paid / b.due)[0]
+  const worstRate = Math.round((worst.paid / worst.due) * 100)
+  if (worstRate < 70 && classes.length > 1) {
+    out.push({
+      id: 'fee-worst-class', scope: 'class',
+      title: `${worst.className} fee collection is behind`,
+      observation: `${worst.className} has collected ${worstRate}% of its fees (${naira(worst.paid)} of ${naira(worst.due)}).`,
+      supportingData: `${worst.withBalance} of ${worst.students} students in this class still have a balance.`,
+      suggestedAction: `Send a reminder to the families of students with a balance in ${worst.className}.`,
+      level: worstRate < 40 ? 'critical' : 'warning', generatedAt: now,
+    })
+  }
+  return out
+}

@@ -7,7 +7,8 @@ import { buildResults } from '@/lib/results'
 import type {
   Class, Subject, Teacher, Student, Parent, AttendanceRecord, Assessment, AssessmentScore,
   Result, Fee, Payment, Announcement, AppNotification, RecentActivity, AttendanceStatus,
-  AssessmentType, AnnouncementAudience, School, Gender,
+  AssessmentType, AnnouncementAudience, School, Gender, Assignment, AssignmentRecord,
+  AssignmentMode, AssignmentStatus, SchoolFeatures,
 } from '@/types'
 
 // -----------------------------------------------------------------------------
@@ -21,16 +22,21 @@ type TableKey =
   | 'school' | 'classes' | 'subjects' | 'teachers' | 'teacher_classes' | 'teacher_subjects'
   | 'students' | 'parents' | 'student_parents' | 'attendance' | 'assessments'
   | 'assessment_scores' | 'fees' | 'payments' | 'announcements'
+  | 'assignments' | 'assignment_records'
 type Raw = Record<TableKey, Row[]>
 
 const ALL_KEYS: TableKey[] = [
   'school', 'classes', 'subjects', 'teachers', 'teacher_classes', 'teacher_subjects', 'students',
   'parents', 'student_parents', 'attendance', 'assessments', 'assessment_scores', 'fees',
-  'payments', 'announcements',
+  'payments', 'announcements', 'assignments', 'assignment_records',
 ]
+
+/** Tables added by later migrations. If one is missing the app keeps working and just hides that module. */
+const OPTIONAL_KEYS: TableKey[] = ['assignments', 'assignment_records']
+class MissingTableError extends Error {}
 const emptyRaw = (): Raw => Object.fromEntries(ALL_KEYS.map((k) => [k, [] as Row[]])) as Raw
 
-const SPECS: Record<TableKey, { table: string; order: string[] }> = {
+const SPECS: Record<TableKey, { table: string; order: string[]; select?: string }> = {
   school: { table: 'school_settings', order: ['id'] },
   classes: { table: 'classes', order: ['name', 'id'] },
   subjects: { table: 'subjects', order: ['name', 'id'] },
@@ -46,6 +52,9 @@ const SPECS: Record<TableKey, { table: string; order: string[] }> = {
   fees: { table: 'fees', order: ['id'] },
   payments: { table: 'payments', order: ['created_at', 'id'] },
   announcements: { table: 'announcements', order: ['created_at', 'id'] },
+  assignments: { table: 'assignments', order: ['due_date', 'id'] },
+  // the embedded join lets us load only the current term's records
+  assignment_records: { table: 'assignment_records', order: ['id'], select: '*, assignments!inner(term, session)' },
 }
 
 /** Attendance older than this is not loaded into the app (keeps the app fast). */
@@ -65,15 +74,22 @@ async function fetchAll(key: TableKey, school?: Row): Promise<Row[]> {
   const size = 1000 // Supabase returns at most 1000 rows per request — page through.
   const out: Row[] = []
   for (let from = 0; ; from += size) {
-    let q: any = supabase.from(spec.table).select('*')
+    let q: any = supabase.from(spec.table).select(spec.select ?? '*')
     if (key === 'attendance') {
       const since = new Date(Date.now() - ATTENDANCE_WINDOW_DAYS * 864e5).toLocaleDateString('en-CA')
       q = q.gte('date', since)
     }
     if (key === 'fees' && school) q = q.eq('term', school.current_term).eq('session', school.current_session)
+    if (key === 'assignments' && school) q = q.eq('term', school.current_term).eq('session', school.current_session)
+    if (key === 'assignment_records' && school)
+      q = q.eq('assignments.term', school.current_term).eq('assignments.session', school.current_session)
     spec.order.forEach((o) => { q = q.order(o) })
     const { data, error } = await q.range(from, from + size - 1)
-    if (error) throw new Error(`${spec.table}: ${friendlyError(error)}`)
+    if (error) {
+      const missing = error.code === 'PGRST205' || error.code === '42P01' || /could not find the table|does not exist/i.test(error.message ?? '')
+      if (missing && OPTIONAL_KEYS.includes(key)) throw new MissingTableError(spec.table)
+      throw new Error(`${spec.table}: ${friendlyError(error)}`)
+    }
     out.push(...(data ?? []))
     if (!data || data.length < size) break
   }
@@ -106,6 +122,10 @@ export interface StoreActions {
   recordPayment: (i: { studentId: string; feeId: string; amount: number; date: string; method: Payment['method']; reference: string; note?: string }) => Promise<void>
   addAnnouncement: (i: { title: string; message: string; audience: AnnouncementAudience; classId?: string }) => Promise<void>
   updateSchool: (i: { name: string; address: string; phone: string; email: string; currentSession: string; currentTerm: School['currentTerm'] }) => Promise<void>
+  createAssignment: (i: { classId: string; subjectId: string; title: string; description: string; dueDate: string; mode: AssignmentMode; maxScore: number | null }) => Promise<string>
+  deleteAssignment: (id: string) => Promise<void>
+  saveAssignmentRecords: (assignmentId: string, rows: { studentId: string; status: AssignmentStatus; score: number | null }[]) => Promise<void>
+  setFeature: (key: keyof SchoolFeatures, enabled: boolean) => Promise<void>
   markNotificationRead: (id: string) => void
 }
 
@@ -127,6 +147,12 @@ interface StoreValue {
   announcements: Announcement[]
   notifications: AppNotification[]
   recentActivity: RecentActivity[]
+  assignments: Assignment[]
+  assignmentRecords: AssignmentRecord[]
+  /** Is an optional module switched on for this school AND available in the database? */
+  featureOn: (key: keyof SchoolFeatures) => boolean
+  /** True when a database update (migration) hasn't been applied yet. */
+  schemaOutdated: boolean
   actions: StoreActions
 }
 
@@ -146,6 +172,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [readIds, setReadIds] = useState<string[]>([])
+  const [missing, setMissing] = useState<TableKey[]>([])
 
   const refresh = useCallback(async (keys: TableKey[] = ALL_KEYS) => {
     // Fees depend on the school's current term, so make sure we have the school row first.
@@ -156,9 +183,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       schoolRow = next.school[0]
     }
     const rest = keys.filter((k) => k !== 'school')
-    const loaded = await Promise.all(rest.map((k) => fetchAll(k, schoolRow)))
+    const nowMissing: TableKey[] = []
+    const loaded = await Promise.all(rest.map(async (k) => {
+      try { return await fetchAll(k, schoolRow) }
+      catch (e) { if (e instanceof MissingTableError) { nowMissing.push(k); return [] as Row[] } throw e }
+    }))
     rest.forEach((k, i) => { next[k] = loaded[i] })
     setRaw((prev) => ({ ...prev, ...next }))
+    setMissing((prev) => [...prev.filter((k) => !(rest as TableKey[]).includes(k)), ...nowMissing])
   }, [])
 
   // Load everything once the user is signed in; clear it on sign-out.
@@ -189,6 +221,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       logoInitials: initialsOf(sRow?.name ?? 'My School'),
       currentSession: sRow?.current_session ?? '',
       currentTerm: (sRow?.current_term ?? 'First Term') as School['currentTerm'],
+      features: { assignments: sRow?.features?.assignments ?? true },
     }
 
     const subjectIds = raw.subjects.map((s) => s.id as string)
@@ -268,6 +301,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }))
       .sort((a, b) => b.date.localeCompare(a.date))
 
+    const assignments: Assignment[] = raw.assignments.map((a) => ({
+      id: a.id, classId: a.class_id, subjectId: a.subject_id, title: a.title, description: a.description ?? '',
+      dueDate: a.due_date, mode: a.mode, maxScore: a.max_score === null ? null : Number(a.max_score),
+      term: a.term, session: a.session, createdBy: a.created_by ?? '', createdAt: a.created_at,
+    }))
+    const assignmentRecords: AssignmentRecord[] = raw.assignment_records.map((r) => ({
+      id: r.id, assignmentId: r.assignment_id, studentId: r.student_id, status: r.status,
+      score: r.score === null ? null : Number(r.score),
+    }))
+
     const results = buildResults(students, assessments, assessmentScores, school)
 
     // ---- recent activity, built from real records ----
@@ -277,6 +320,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     raw.students.forEach((s) => activity.push({ id: `st-${s.id}`, type: 'student', message: `New student added: ${s.first_name} ${s.last_name}`, timestamp: s.created_at }))
     raw.teachers.forEach((t) => activity.push({ id: `te-${t.id}`, type: 'teacher', message: `New teacher added: ${t.first_name} ${t.last_name}`, timestamp: t.created_at }))
     raw.assessments.forEach((a) => activity.push({ id: `as-${a.id}`, type: 'assessment', message: `Assessment created: ${a.name} (${className(a.class_id)})`, timestamp: a.created_at }))
+    raw.assignments.forEach((a) => activity.push({ id: `ag-${a.id}`, type: 'assignment', message: `Assignment posted: ${a.title} (${className(a.class_id)})`, timestamp: a.created_at }))
     raw.payments.forEach((p) => activity.push({ id: `pa-${p.id}`, type: 'payment', message: `Fee payment recorded for ${nameOf(p.student_id)}`, timestamp: p.created_at }))
     const attLatest = new Map<string, { classId: string; date: string; ts: string }>()
     raw.attendance.forEach((a) => {
@@ -291,9 +335,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const notes: Omit<AppNotification, 'read'>[] = []
     raw.announcements.forEach((a) => notes.push({ id: `n-ann-${a.id}`, type: 'announcement', title: 'New announcement', description: a.title, date: a.created_at }))
     raw.assessments.forEach((a) => notes.push({ id: `n-as-${a.id}`, type: 'assessment', title: 'Assessment posted', description: `${a.name} — ${className(a.class_id)}`, date: a.created_at }))
+    raw.assignments.forEach((a) => notes.push({ id: `n-ag-${a.id}`, type: 'assignment', title: 'New assignment', description: `${a.title} — due ${a.due_date}`, date: a.created_at }))
     raw.payments.forEach((p) => notes.push({ id: `n-pa-${p.id}`, type: 'payment', title: 'Fee payment recorded', description: `${nameOf(p.student_id)}`, date: p.created_at }))
 
-    return { school, classes, subjects, teachers, students, parents, attendanceRecords, assessments, assessmentScores, results, fees, payments, announcements, recentActivity, notes }
+    return { school, classes, subjects, teachers, students, parents, attendanceRecords, assessments, assessmentScores, results, fees, payments, announcements, recentActivity, assignments, assignmentRecords, notes }
   }, [raw])
 
   const notifications: AppNotification[] = useMemo(
@@ -455,6 +500,40 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await refresh()
       },
 
+      async createAssignment(i) {
+        const school = r().school[0]
+        const a = must(await supabase.from('assignments').insert({
+          class_id: i.classId, subject_id: i.subjectId, title: i.title.trim(), description: i.description.trim(),
+          due_date: i.dueDate, mode: i.mode, max_score: i.mode === 'score' ? i.maxScore : null,
+          term: school.current_term, session: school.current_session,
+        }).select('id').single())
+        await refresh(['assignments'])
+        return a.id as string
+      },
+
+      async deleteAssignment(id) {
+        const { error } = await supabase.from('assignments').delete().eq('id', id)
+        if (error) throw new Error(friendlyError(error))
+        await refresh(['assignments', 'assignment_records'])
+      },
+
+      async saveAssignmentRecords(assignmentId, rows) {
+        const payload = rows.map((x) => ({ assignment_id: assignmentId, student_id: x.studentId, status: x.status, score: x.score }))
+        must(await supabase.from('assignment_records').upsert(payload, { onConflict: 'assignment_id,student_id' }).select())
+        await refresh(['assignment_records'])
+      },
+
+      async setFeature(key, enabled) {
+        const current = (r().school[0]?.features ?? {}) as Record<string, boolean>
+        const { error } = await supabase.from('school_settings').update({ features: { ...current, [key]: enabled } }).eq('id', 1)
+        if (error) {
+          if (error.code === '42703' || /features/i.test(error.message ?? ''))
+            throw new Error('The database needs its latest update first (run migration 002 in Supabase — see the README).')
+          throw new Error(friendlyError(error))
+        }
+        await refresh()
+      },
+
       markNotificationRead(id) {
         setReadIds((prev) => {
           if (prev.includes(id)) return prev
@@ -467,7 +546,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [refresh, user])
 
   const { notes: _notes, ...rest } = derived
-  const value: StoreValue = { loading, error, ...rest, notifications, actions }
+  const featureOn = (key: keyof SchoolFeatures) =>
+    !!rest.school.features[key] && !(key === 'assignments' && missing.includes('assignments'))
+  const schemaOutdated = missing.length > 0
+  const value: StoreValue = { loading, error, ...rest, notifications, featureOn, schemaOutdated, actions }
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
 }
 

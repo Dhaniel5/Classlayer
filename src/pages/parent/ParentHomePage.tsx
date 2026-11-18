@@ -8,12 +8,13 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { EmptyState } from '@/components/ui/states'
-import { initials, formatNaira, fmtPct } from '@/lib/utils'
+import { initials, formatNaira, fmtPct, formatDate, todayLocalISO } from '@/lib/utils'
+import { assignmentOutcome } from '@/lib/assignments'
 import { studentAttendanceRate, studentAverage } from '@/lib/analytics'
 
 export default function ParentHomePage() {
   const { user } = useAuth()
-  const { parents, students, classes, attendanceRecords, results, fees, announcements } = useStore()
+  const { parents, students, classes, attendanceRecords, results, fees, announcements, assignments, assignmentRecords, subjects, featureOn } = useStore()
   const navigate = useNavigate()
 
   const parent = parents.find((p) => p.id === user?.linkedId)
@@ -73,6 +74,38 @@ export default function ParentHomePage() {
           ) : <p className="text-sm text-slate-400">No results recorded yet this term.</p>}
         </CardContent>
       </Card>
+
+      {featureOn('assignments') && (
+        <Card>
+          <CardContent className="pt-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-900">Assignments</h3>
+              <Button variant="link" size="sm" onClick={() => navigate('/parent/assignments')}>View all <ArrowRight className="h-3.5 w-3.5" /></Button>
+            </div>
+            {(() => {
+              const soon = assignments.filter((a) => a.classId === child.classId && a.dueDate >= todayLocalISO())
+                .sort((a, b) => a.dueDate.localeCompare(b.dueDate)).slice(0, 3)
+              if (soon.length === 0) return <p className="text-sm text-slate-400">Nothing due right now.</p>
+              return (
+                <div className="space-y-2.5">
+                  {soon.map((a) => {
+                    const o = assignmentOutcome(a, assignmentRecords.find((r) => r.assignmentId === a.id && r.studentId === child.id))
+                    return (
+                      <div key={a.id} className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-slate-800 truncate">{a.title}</p>
+                          <p className="text-xs text-slate-500">{subjects.find((s) => s.id === a.subjectId)?.name} · Due {formatDate(a.dueDate)}</p>
+                        </div>
+                        <Badge tone={o.tone}>{o.label}</Badge>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <Card className="cursor-pointer" onClick={() => navigate('/parent/fees')}>

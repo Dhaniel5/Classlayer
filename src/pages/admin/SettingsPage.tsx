@@ -45,6 +45,7 @@ export default function SettingsPage() {
         <TabsList>
           <TabsTrigger value="school">School Profile</TabsTrigger>
           <TabsTrigger value="academic">Academic</TabsTrigger>
+          <TabsTrigger value="features">Features</TabsTrigger>
           <TabsTrigger value="users">Users & Roles</TabsTrigger>
           <TabsTrigger value="ai">AI</TabsTrigger>
         </TabsList>
@@ -91,6 +92,8 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="features"><FeaturesPanel /></TabsContent>
 
         <TabsContent value="users">
           {canManageUsers ? <UsersAndRoles myEmail={user!.email} proprietor={user!.role === 'proprietor'} /> : (
@@ -172,5 +175,57 @@ function UsersAndRoles({ myEmail, proprietor }: { myEmail: string; proprietor: b
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+function FeaturesPanel() {
+  const { school, actions, schemaOutdated } = useStore()
+  const { toast } = useToast()
+  const [busy, setBusy] = useState(false)
+  const on = school.features.assignments
+
+  async function toggle() {
+    setBusy(true)
+    try {
+      await actions.setFeature('assignments', !on)
+      toast({ title: on ? 'Assignments turned off' : 'Assignments turned on', tone: 'success' })
+    } catch (err) {
+      toast({ title: 'Could not change this setting', description: (err as Error).message, tone: 'error' })
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div>
+          <CardTitle>Optional modules</CardTitle>
+          <CardDescription>Turn on only what your school uses. A switched-off module disappears for everyone; its data is kept.</CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {schemaOutdated && (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            The database needs its latest update before this module can be used. Run <code>002_assignments_and_features.sql</code> in
+            Supabase (SQL Editor), then reload.
+          </p>
+        )}
+        <div className="flex items-start justify-between gap-4 rounded-xl border border-slate-200 p-4">
+          <div>
+            <p className="text-sm font-medium text-slate-900">Assignments</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Teachers post homework with a task, subject and due date. Students do it in their notebooks. Teachers then record a
+              score or done / not done, and parents can see it.
+            </p>
+          </div>
+          <button
+            role="switch" aria-checked={on} aria-label="Assignments" onClick={toggle} disabled={busy || schemaOutdated}
+            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${on ? 'bg-teal-600' : 'bg-slate-300'}`}
+          >
+            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${on ? 'left-[1.375rem]' : 'left-0.5'}`} />
+          </button>
+        </div>
+        <p className="text-xs text-slate-400">Other optional modules will be added here as they become available.</p>
+      </CardContent>
+    </Card>
   )
 }

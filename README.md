@@ -7,7 +7,10 @@ with an empty school.
 ## 1. Set up the backend (about 15 minutes)
 
 1. Create a project at https://supabase.com.
-2. **SQL Editor** → paste and run `supabase/migrations/001_init.sql`. (Run it once.)
+2. **SQL Editor** → paste and run `supabase/migrations/001_init.sql`, then run
+   `supabase/migrations/002_assignments_and_features.sql` as a second query. (Run each once, in that order.)
+   Already ran 001 earlier? Just run 002 now. Until 002 is run, the app works normally but the Assignments
+   module stays hidden and Settings → Features tells you the update is needed.
 3. **Authentication → Providers → Email**: keep "Confirm email" **on**. Under
    **Authentication → Sign In / Providers**, **turn off "Allow new users to sign up"** — accounts are
    created by you, not by the public.
@@ -87,6 +90,21 @@ email says CLASSLAYER and your school name rather than the generic text.
 
 If you open the Invitations page before this is done, it shows a "not set up yet" notice instead of failing.
 
+## 6. Optional modules (Settings → Features)
+
+Each school switches optional modules on or off in **Settings → Features** (Proprietor, Head of School or
+School Admin). A switched-off module disappears for everyone and is blocked in the database, but its data is
+kept if you switch it back on. Today there is one: **Assignments**.
+
+**Assignments** (default: on). A teacher posts a task for a class and subject with a due date and chooses how to
+record it: *Score* (out of a maximum) or *Done / not done*. Students do the work in their notebooks; the teacher
+then records the result, and parents see it under **Assignments** and on their home screen. Teachers can only
+post to and mark their own classes. Assignments are homework tracking: they are **not** part of term results or
+report cards.
+
+An online *testing* module (students taking tests in the app) does **not exist yet**. The switch system is ready
+for it: when it is built it gets its own switch here, off by default.
+
 ## Who can see what (enforced in the database, not just the screens)
 
 | Role | Students | Fees & payments | Other |
@@ -100,6 +118,10 @@ If you open the Invitations page before this is done, it shows a "not set up yet
 
 A teacher's app never receives other classes' data at all — Postgres row-level security filters it.
 
+**AI features are staff-only.** Parents (and students, who have no login) never see any AI content. Staff see AI
+insights built from the data their role can access: the Accountant's AI page shows fee-collection insights only,
+and the Report Comments tool is not shown to them.
+
 ## What has and hasn't been tested
 
 - **Tested:** the migration runs on PostgreSQL 16, and `supabase/tests/rls_test.sql` verifies the table above
@@ -107,6 +129,10 @@ A teacher's app never receives other classes' data at all — Postgres row-level
   role-less emails see nothing, fee/payment triggers, append-only payments, score and attendance
   validation, role-granting limits). TypeScript compiles, the production build succeeds, and the login /
   route protection renders in a browser.
+- **Tested (assignments and feature switch):** `supabase/tests/rls_test_assignments.sql` checks who can post and
+  mark, that parents see only their own child's results, and that switching the module off hides it from
+  everyone. The screens (post, mark, parent view, AI restrictions, the switch, and the "database update not
+  run yet" fallback) pass 34 browser checks against a fake backend.
 - **Tested (invitations):** the `invite-users` function type-checks in Deno and passes 21 checks against a fake
   Supabase (`supabase/tests/invite_function_test.mjs`): unknown emails can't be invited, the link always uses
   `SITE_URL`, each role can invite only who it should, rate limits stop cleanly. The set-password page and the
@@ -132,6 +158,7 @@ A teacher's app never receives other classes' data at all — Postgres row-level
 - Only the last 120 days of attendance are loaded into the app; only the current term's fees are shown.
 - Payments can't be edited or deleted (by design — correct mistakes with a note and a new entry).
   Students with payments can't be deleted; set them Inactive.
+- Assignments don't feed term results, and there is no "edit assignment" yet (delete and re-post).
 - Grading scale is fixed in `src/lib/grading.ts` (not editable in Settings yet). All subjects are offered in every class.
 - PDF download uses the browser's print-to-PDF.
 - No automated backups beyond Supabase's plan defaults — check the backup policy of your Supabase plan before launch.

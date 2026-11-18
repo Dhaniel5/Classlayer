@@ -5,12 +5,14 @@ import { Topbar } from './Topbar'
 import { useAuth } from '@/services/auth/AuthContext'
 import { getNavForRole } from '@/lib/permissions'
 import { StoreGate } from './StoreGate'
+import { useStore } from '@/services/store'
 
 export function AppShell() {
   const { user } = useAuth()
+  const { featureOn } = useStore()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   if (!user) return null
-  const navItems = getNavForRole(user.role)
+  const navItems = getNavForRole(user.role, featureOn)
 
   return (
     <div className="flex h-screen bg-slate-50">

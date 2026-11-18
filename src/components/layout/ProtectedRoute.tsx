@@ -2,8 +2,9 @@ import { Navigate } from 'react-router-dom'
 import { Loader2, ShieldAlert } from 'lucide-react'
 import { useAuth } from '@/services/auth/AuthContext'
 import { Button } from '@/components/ui/button'
-import { canAccess, type Feature } from '@/lib/permissions'
-import type { Role } from '@/types'
+import { canAccess, FEATURE_FLAGS, type Feature } from '@/lib/permissions'
+import { useStore } from '@/services/store'
+import type { Role, SchoolFeatures } from '@/types'
 
 export function ProtectedRoute({ children, allow }: { children: React.ReactNode; allow?: Role[] }) {
   const { user, status, sessionEmail, signOut } = useAuth()
@@ -35,6 +36,16 @@ export function ProtectedRoute({ children, allow }: { children: React.ReactNode;
 /** Blocks a staff page the signed-in role isn't allowed to open (also enforced by the database). */
 export function RequireFeature({ feature, children }: { feature: Feature; children: React.ReactNode }) {
   const { user } = useAuth()
+  const { featureOn } = useStore()
   if (!user || !canAccess(user.role, feature)) return <Navigate to="/app/dashboard" replace />
+  const flag = FEATURE_FLAGS[feature]
+  if (flag && !featureOn(flag)) return <Navigate to="/app/dashboard" replace />
+  return <>{children}</>
+}
+
+/** Blocks a page whose optional module the school has switched off. */
+export function RequireFlag({ flag, to, children }: { flag: keyof SchoolFeatures; to: string; children: React.ReactNode }) {
+  const { featureOn } = useStore()
+  if (!featureOn(flag)) return <Navigate to={to} replace />
   return <>{children}</>
 }

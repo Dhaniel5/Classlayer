@@ -4,11 +4,14 @@ import { StoreProvider } from '@/services/store'
 import { ToastProvider } from '@/components/ui/toast'
 import { AppShell } from '@/components/layout/AppShell'
 import { ParentShell } from '@/components/layout/ParentShell'
-import { ProtectedRoute, RequireFeature } from '@/components/layout/ProtectedRoute'
+import { ProtectedRoute, RequireFeature, RequireFlag } from '@/components/layout/ProtectedRoute'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import SetupRequired from '@/pages/auth/SetupRequired'
 import SetPasswordPage from '@/pages/auth/SetPasswordPage'
 import InvitationsPage from '@/pages/admin/InvitationsPage'
+import AssignmentsPage from '@/pages/admin/AssignmentsPage'
+import AssignmentDetailPage from '@/pages/admin/AssignmentDetailPage'
+import ParentAssignmentsPage from '@/pages/parent/ParentAssignmentsPage'
 import type { Feature } from '@/lib/permissions'
 
 import LoginPage from '@/pages/auth/LoginPage'
@@ -80,6 +83,8 @@ export default function App() {
                 <Route path="attendance" element={guard('attendance', <AttendancePage />)} />
                 <Route path="assessments" element={guard('assessments', <AssessmentsPage />)} />
                 <Route path="assessments/:assessmentId" element={guard('assessments', <AssessmentScoreEntryPage />)} />
+                <Route path="assignments" element={guard('assignments', <AssignmentsPage />)} />
+                <Route path="assignments/:assignmentId" element={guard('assignments', <AssignmentDetailPage />)} />
                 <Route path="results" element={guard('results', <ResultsPage />)} />
                 <Route path="fees" element={guard('fees', <FeesPage />)} />
                 <Route path="reports" element={guard('reports', <ReportsPage />)} />
@@ -102,6 +107,7 @@ export default function App() {
                 <Route path="home" element={<ParentHomePage />} />
                 <Route path="child" element={<ParentChildPage />} />
                 <Route path="attendance" element={<ParentAttendancePage />} />
+                <Route path="assignments" element={<RequireFlag flag="assignments" to="/parent/home"><ParentAssignmentsPage /></RequireFlag>} />
                 <Route path="results" element={<ParentResultsPage />} />
                 <Route path="fees" element={<ParentFeesPage />} />
                 <Route path="reports" element={<ParentReportsPage />} />
